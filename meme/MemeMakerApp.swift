@@ -1,10 +1,10 @@
 import SwiftUI
 
 @main
-struct MemeApp: App {
+struct MemeMakerApp: App {
     var body: some Scene {
         WindowGroup {
-            MemeView()
+            ContentView()
         }
     }
 }

@@ -2,6 +2,9 @@ import SwiftUI
 
 struct ContentView: View {
     var body: some View {
-        MemeEditorView()
+        NavigationView {
+            HomeView()
+        }
+        .navigationViewStyle(StackNavigationViewStyle())
     }
 }

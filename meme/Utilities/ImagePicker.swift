@@ -5,10 +5,8 @@ struct ImagePicker: UIViewControllerRepresentable {
     @Binding var selectedImage: UIImage?
     @Binding var isShowingPicker: Bool
     @Binding var overlayImages: [ImageItem]
-    @Binding var isAddingBackground: Bool
+    @Binding var isAddingBackgroundImage: Bool
     @Binding var isLoadingImage: Bool
-
-    // Add a closure to calculate canvas size
     var calculateCanvasSize: (UIImage?, CGSize) -> CGSize
 
     func makeUIViewController(context: Context) -> PHPickerViewController {
@@ -46,20 +44,16 @@ struct ImagePicker: UIViewControllerRepresentable {
                     DispatchQueue.main.async {
                         self.parent.isLoadingImage = false
                         if let image = image as? UIImage {
-                            if self.parent.isAddingBackground {
-                                // Adding background image
+                            if self.parent.isAddingBackgroundImage {
                                 self.parent.selectedImage = image
                             } else {
-                                // Adding overlay image
                                 var newImageItem = ImageItem(image: image, offset: .zero, scale: 1.0, rotation: .zero, width: 80, height: 80)
-
-                                // Calculate initial offset based on canvas size
                                 let canvasSize = self.parent.calculateCanvasSize(self.parent.selectedImage, UIScreen.main.bounds.size)
-                                let initialOffsetX = (canvasSize.width / 2) - (newImageItem.width / 2)
-                                let initialOffsetY = (canvasSize.height / 2) - (newImageItem.height / 2)
-                                newImageItem.initialOffset = CGSize(width: initialOffsetX, height: initialOffsetY)
+                                
+                                // Center the overlay image
+                                newImageItem.initialOffset = CGSize(width: (canvasSize.width / 2) - (newImageItem.width / 2), height: (canvasSize.height / 2) - (newImageItem.height / 2))
                                 newImageItem.offset = newImageItem.initialOffset
-
+                                
                                 self.parent.overlayImages.append(newImageItem)
                             }
                         }

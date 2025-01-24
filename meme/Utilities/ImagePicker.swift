@@ -39,21 +39,33 @@ struct ImagePicker: UIViewControllerRepresentable {
                 DispatchQueue.main.async {
                     self.parent.isLoadingImage = true
                 }
-
                 provider.loadObject(ofClass: UIImage.self) { image, _ in
                     DispatchQueue.main.async {
                         self.parent.isLoadingImage = false
-                        if let image = image as? UIImage {
+                        if let uiImage = image as? UIImage {
                             if self.parent.isAddingBackgroundImage {
-                                self.parent.selectedImage = image
+                                self.parent.selectedImage = uiImage
                             } else {
-                                var newImageItem = ImageItem(image: image, offset: .zero, scale: 1.0, rotation: .zero, width: 80, height: 80)
-                                let canvasSize = self.parent.calculateCanvasSize(self.parent.selectedImage, UIScreen.main.bounds.size)
-                                
-                                // Center the overlay image
-                                newImageItem.initialOffset = CGSize(width: (canvasSize.width / 2) - (newImageItem.width / 2), height: (canvasSize.height / 2) - (newImageItem.height / 2))
+                                // Creating a new overlay image
+                                var newImageItem = ImageItem(
+                                    image: uiImage,
+                                    offset: .zero,
+                                    scale: 1.0,
+                                    rotation: .zero,
+                                    width: 80,
+                                    height: 80
+                                )
+                                // If you want to position it initially,
+                                // read the canvas size from calculateCanvasSize
+                                let canvasSize = self.parent.calculateCanvasSize(
+                                    self.parent.selectedImage,
+                                    UIScreen.main.bounds.size
+                                )
+                                newImageItem.initialOffset = CGSize(
+                                    width: (canvasSize.width / 2) - (newImageItem.width / 2),
+                                    height: (canvasSize.height / 2) - (newImageItem.height / 2)
+                                )
                                 newImageItem.offset = newImageItem.initialOffset
-                                
                                 self.parent.overlayImages.append(newImageItem)
                             }
                         }

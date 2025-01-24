@@ -1,206 +1,227 @@
 import SwiftUI
 
 struct MemeEditorView: View {
-    @State private var baseImage: UIImage?
-    @State private var overlayImages: [ImageItem] = []
-    @State private var overlayTexts: [TextItem] = []
-    @State private var isLoadingImage = false
-    @State private var showDeleteConfirmation = false
-    @State private var showImageOptions = false
-    @State private var isShowingImagePicker = false
-    @State private var isAddingBackgroundImage = false
-    @State private var isShowingTextModal = false
+    /// If non-nil, we’re editing an existing meme; if nil, we’re creating a new one
+    let memeToEdit: Meme?
+    /// Callback when user completes saving
+    let onSave: (Meme) -> Void
+    
+    @State var baseImage: UIImage?
+    @State var overlayImages: [ImageItem] = []
+    @State var overlayTexts: [TextItem] = []
+    
+    @State var isLoadingImage = false
+    @State var showExitConfirmation = false
+    @State var showImageOptions = false
+    @State var isShowingImagePicker = false
+    @State var isAddingBackgroundImage = false
+    @State var isShowingTextModal = false
+    
+    /// For new memes only: we ask them to name it
+    @State var showNamingSheet = false
+    @State var draftName: String = ""
+    
+    @State var memeTitle: String = ""
+    
+    /// Track final “canvas” size
+    @State var canvasSize: CGSize = .zero
+    
+    @Environment(\.presentationMode) var presentationMode
 
     var body: some View {
-        VStack {
-            // Header
-            HeaderView(showDeleteConfirmation: $showDeleteConfirmation, showImageOptions: $showImageOptions, baseImage: baseImage)
-
-            // Meme Canvas
-            GeometryReader { geometry in
-                ZStack {
-                    // Placeholder Text and Button
-                    if baseImage == nil {
-                        PlaceholderView(isAddingBackgroundImage: $isAddingBackgroundImage, isShowingImagePicker: $isShowingImagePicker)
+        GeometryReader { geometry in
+            ZStack {
+                // Stationary background
+                Color(UIColor.systemBackground)
+                    .edgesIgnoringSafeArea(.all)
+                
+                // The "canvas" area, centered vertically & horizontally
+                VStack {
+                    Spacer()
+                    
+                    ZStack {
+                        if let baseImg = baseImage {
+                            canvasWithOverlays(baseImage: baseImg, geometry: geometry)
+                        } else {
+                            placeholderCanvas
+                        }
                     }
-
-                    // Base Image (fills canvas)
-                    if let baseImage = baseImage {
-                        BaseImageView(baseImage: baseImage, geometry: geometry)
-                    }
-
-                    // Overlay Images
-                    ForEach(overlayImages) { imageItem in
-                        overlayImageView(for: imageItem)
+                    // Use 0.8 width, 0.5 height for more obvious vertical centering
+                    .frame(width: geometry.size.width * 0.8,
+                           height: geometry.size.height * 0.5)
+                    .background(Color(UIColor.secondarySystemBackground))
+                    .cornerRadius(10)
+                    .shadow(radius: 6)
+                    .onAppear {
+                        // compute the actual canvas size
+                        let w = geometry.size.width * 0.8
+                        let h = geometry.size.height * 0.5
+                        canvasSize = CGSize(width: max(w, 1), height: max(h, 1))
+                        
+                        print("Canvas size: \(canvasSize)")
                     }
                     
-                    // Overlay Texts
-                    ForEach(overlayTexts) { textItem in
-                        overlayTextView(for: textItem, geometry: geometry)
-                    }
-
-                    // Activity Indicator
-                    if isLoadingImage {
-                        ActivityIndicatorView(isAnimating: $isLoadingImage, style: .large)
-                            .frame(width: calculateCanvasSize(for: baseImage, in: geometry.size).width, height: calculateCanvasSize(for: baseImage, in: geometry.size).height)
+                    Spacer()
+                }
+                
+                // Spinner while saving/picking images
+                if isLoadingImage {
+                    ActivityIndicatorView(isAnimating: $isLoadingImage, style: .large)
+                }
+            }
+            .navigationBarTitle("Meme Editor", displayMode: .inline)
+            .navigationBarBackButtonHidden(true)
+            .toolbar {
+                // Left: Exit
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Exit") {
+                        // If there's no base image, we just go back with no dialog
+                        if baseImage == nil {
+                            presentationMode.wrappedValue.dismiss()
+                        } else {
+                            showExitConfirmation = true
+                        }
                     }
                 }
-                .frame(width: calculateCanvasSize(for: baseImage, in: geometry.size).width, height: calculateCanvasSize(for: baseImage, in: geometry.size).height)
-                .background(Color(UIColor.secondarySystemBackground))
-                .clipped()
+                // Right: +
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        showImageOptions = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                }
             }
-        }
-        .sheet(isPresented: $isShowingImagePicker) {
-            ImagePicker(selectedImage: $baseImage, isShowingPicker: $isShowingImagePicker, overlayImages: $overlayImages, isAddingBackgroundImage: $isAddingBackgroundImage, isLoadingImage: $isLoadingImage, calculateCanvasSize: calculateCanvasSize)
-        }
-        .sheet(isPresented: $isShowingTextModal) {
-            TextOptionsView(overlayTexts: $overlayTexts, isShowingTextModal: $isShowingTextModal, canvasSize: calculateCanvasSize(for: baseImage, in: UIScreen.main.bounds.size))
-        }
-        .confirmationDialog("Are you sure you want to delete this project?", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
-            Button("Delete", role: .destructive) {
-                baseImage = nil
-                overlayImages = []
-                overlayTexts = []
-            }
-            Button("Cancel", role: .cancel) { }
-        }
-        .confirmationDialog("Select an Option", isPresented: $showImageOptions, titleVisibility: .visible) {
-            ImageOptionsView(baseImage: baseImage, isAddingBackgroundImage: $isAddingBackgroundImage, isShowingImagePicker: $isShowingImagePicker, isShowingTextModal: $isShowingTextModal)
-        }
-    }
-
-    @ViewBuilder
-    private func overlayImageView(for imageItem: ImageItem) -> some View {
-        if let image = imageItem.image { // Unwrap the optional UIImage
-            Image(uiImage: image) // Use the unwrapped image
-                .resizable()
-                .scaledToFit()
-                .frame(width: imageItem.width, height: imageItem.height)
-                .scaleEffect(imageItem.scale)
-                .rotationEffect(imageItem.rotation)
-                .offset(imageItem.offset)
-                .gesture(
-                    DragGesture()
-                        .onChanged { gesture in
-                            if let index = overlayImages.firstIndex(where: { $0.id == imageItem.id }) {
-                                // Calculate offset based on initialOffset and translation
-                                let newOffsetX = imageItem.initialOffset.width + gesture.translation.width
-                                let newOffsetY = imageItem.initialOffset.height + gesture.translation.height
-                                overlayImages[index].offset = CGSize(width: newOffsetX, height: newOffsetY)
+            // Confirmation for "Exit" only if there's a base image
+            .confirmationDialog(
+                "Exit Options",
+                isPresented: $showExitConfirmation,
+                actions: {
+                    if baseImage != nil {
+                        Button("Save Meme & Leave") {
+                            if memeToEdit != nil {
+                                // If editing existing, no rename needed – just save & dismiss
+                                isLoadingImage = true
+                                actuallySaveMeme()
+                                presentationMode.wrappedValue.dismiss()
+                            } else {
+                                // If new, show naming sheet
+                                showNamingSheet = true
                             }
                         }
-                        .onEnded { gesture in
-                            if let index = overlayImages.firstIndex(where: { $0.id == imageItem.id }) {
-                                // Update initialOffset for the next drag
-                                overlayImages[index].initialOffset = overlayImages[index].offset
-                            }
+                        Button("Clear Meme & Stay", role: .destructive) {
+                            clearMeme()
                         }
-                        .simultaneously(with: RotationGesture()
-                            .onChanged { angle in
-                                if let index = overlayImages.firstIndex(where: { $0.id == imageItem.id }) {
-                                    overlayImages[index].rotation = angle
-                                }
-                            }
-                        )
-                        .simultaneously(with: MagnificationGesture()
-                            .onChanged { scale in
-                                if let index = overlayImages.firstIndex(where: { $0.id == imageItem.id }) {
-                                    overlayImages[index].scale = scale
-                                }
-                            }
-                            .onEnded { scale in
-                                if let index = overlayImages.firstIndex(where: { $0.id == imageItem.id }) {
-                                    // Update width and height based on scale
-                                    overlayImages[index].width = overlayImages[index].width * scale
-                                    overlayImages[index].height = overlayImages[index].height * scale
-                                    overlayImages[index].scale = 1.0
-                                }
-                            }
-                        )
-                )
-        } else {
-            // Optionally, display a placeholder or handle the case where the image is nil
-            EmptyView()
-        }
-    }
-    
-    @ViewBuilder
-    private func overlayTextView(for textItem: TextItem, geometry: GeometryProxy) -> some View {
-        Text(textItem.text)
-            .font(textItem.font)
-            .foregroundColor(textItem.color)
-            .frame(width: textItem.width, height: textItem.height)
-            .scaleEffect(textItem.scale)
-            .rotationEffect(textItem.rotation)
-            .offset(textItem.offset)
-            .gesture(
-                DragGesture()
-                    .onChanged { gesture in
-                        if let index = overlayTexts.firstIndex(where: { $0.id == textItem.id }) {
-                            let newOffsetX = textItem.initialOffset.width + gesture.translation.width
-                            let newOffsetY = textItem.initialOffset.height + gesture.translation.height
-                            overlayTexts[index].offset = CGSize(width: newOffsetX, height: newOffsetY)
+                        // "Leave Without Saving"
+                        Button("Leave Without Saving", role: .destructive) {
+                            presentationMode.wrappedValue.dismiss()
                         }
                     }
-                    .onEnded { _ in
-                        if let index = overlayTexts.firstIndex(where: { $0.id == textItem.id }) {
-                            overlayTexts[index].initialOffset = overlayTexts[index].offset
-                        }
-                    }
-                    .simultaneously(with: RotationGesture()
-                        .onChanged { angle in
-                            if let index = overlayTexts.firstIndex(where: { $0.id == textItem.id }) {
-                                overlayTexts[index].rotation = angle
-                            }
-                        }
-                    )
-                    .simultaneously(with: MagnificationGesture()
-                        .onChanged { scale in
-                            if let index = overlayTexts.firstIndex(where: { $0.id == textItem.id }) {
-                                overlayTexts[index].scale = scale
-                            }
-                        }
-                        .onEnded { scale in
-                            if let index = overlayTexts.firstIndex(where: { $0.id == textItem.id }) {
-                                // Correctly calculate new size based on original width/height and scale
-                                let newWidth = textItem.originalWidth * scale
-                                let newHeight = textItem.originalHeight * scale
-                                overlayTexts[index].width = newWidth
-                                overlayTexts[index].height = newHeight
-                                overlayTexts[index].scale = 1.0
-                            }
-                        }
-                    )
+                    Button("Cancel", role: .cancel) {}
+                }
             )
-            .onAppear {
-                if textItem.initialOffset == .zero {
-                    if let index = overlayTexts.firstIndex(where: { $0.id == textItem.id }) {
-                        let canvasSize = calculateCanvasSize(for: baseImage, in: geometry.size)
-                        overlayTexts[index].initialOffset = CGSize(width: (canvasSize.width / 2) - (textItem.width / 2), height: (canvasSize.height / 2) - (textItem.height / 2))
-                        overlayTexts[index].offset = overlayTexts[index].initialOffset
+            // Confirmation for the plus menu
+            .confirmationDialog(
+                "Select an Option",
+                isPresented: $showImageOptions,
+                titleVisibility: .visible
+            ) {
+                if baseImage == nil {
+                    Button("Add Background Image") {
+                        isAddingBackgroundImage = true
+                        isShowingImagePicker = true
+                    }
+                } else {
+                    Button("Change Background Image") {
+                        isAddingBackgroundImage = true
+                        isShowingImagePicker = true
+                    }
+                    Button("Add Overlay Image") {
+                        isAddingBackgroundImage = false
+                        isShowingImagePicker = true
+                    }
+                    Button("Add Text") {
+                        isShowingTextModal = true
                     }
                 }
+                Button("Cancel", role: .cancel) { }
             }
-    }
-
-
-    private func calculateCanvasSize(for image: UIImage?, in availableSpace: CGSize) -> CGSize {
-        guard let image = image else { return availableSpace }
-
-        let imageAspectRatio = image.size.width / image.size.height
-        let availableAspectRatio = availableSpace.width / availableSpace.height
-
-        var canvasWidth = availableSpace.width
-        var canvasHeight = availableSpace.height
-
-        if imageAspectRatio > availableAspectRatio {
-            // Image is wider than available space
-            canvasHeight = availableSpace.width / imageAspectRatio
-        } else {
-            // Image is taller than available space
-            canvasWidth = availableSpace.height * imageAspectRatio
+            // Image picker
+            .sheet(isPresented: $isShowingImagePicker) {
+                ImagePicker(
+                    selectedImage: $baseImage,
+                    isShowingPicker: $isShowingImagePicker,
+                    overlayImages: $overlayImages,
+                    isAddingBackgroundImage: $isAddingBackgroundImage,
+                    isLoadingImage: $isLoadingImage,
+                    calculateCanvasSize: { _,_ in .zero }
+                )
+            }
+            // Text options
+            .sheet(isPresented: $isShowingTextModal) {
+                TextOptionsView(
+                    overlayTexts: $overlayTexts,
+                    isShowingTextModal: $isShowingTextModal,
+                    canvasSize: canvasSize
+                )
+            }
+            // Name prompt, only used if it's a new meme
+            .sheet(isPresented: $showNamingSheet) {
+                namingSheet
+            }
+            .onAppear {
+                loadExistingMeme()
+            }
         }
+    }
+}
 
-        return CGSize(width: canvasWidth, height: canvasHeight)
+// MARK: - Name Prompt
+extension MemeEditorView {
+    var namingSheet: some View {
+        NavigationView {
+            VStack(spacing: 20) {
+                Text("Name Your Meme")
+                    .font(.title2)
+                    .padding(.top, 20)
+                
+                // Our AutoFocusTextField with a smaller frame
+                AutoFocusTextField(
+                    text: $draftName,
+                    placeholder: "Enter Meme Title"
+                )
+                .frame(width: 250, height: 40) // force smaller
+                .padding(.horizontal)
+                
+                if isLoadingImage {
+                    ActivityIndicatorView(isAnimating: $isLoadingImage, style: .medium)
+                }
+                
+                HStack {
+                    Button("Cancel") {
+                        showNamingSheet = false
+                    }
+                    .padding()
+                    
+                    Spacer()
+                    
+                    Button("Save") {
+                        isLoadingImage = true
+                        let finalTitle = draftName.trimmingCharacters(in: .whitespacesAndNewlines)
+                        memeTitle = finalTitle.isEmpty ? "Untitled" : finalTitle
+                        
+                        actuallySaveMeme()
+                        presentationMode.wrappedValue.dismiss()
+                    }
+                    .padding()
+                    .disabled(draftName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+                .padding(.horizontal)
+                
+                Spacer()
+            }
+            .navigationBarTitle("", displayMode: .inline)
+        }
+        .presentationDetents([.medium])
     }
 }

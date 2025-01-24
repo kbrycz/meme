@@ -3,43 +3,56 @@ import SwiftUI
 struct TextItem: Identifiable, Codable {
     let id: UUID
     var text: String
-    var colorComponents: ColorComponents // Store color components
-    var fontName: String // Store font name
+    var colorComponents: ColorComponents
+    var fontName: String
     var fontSize: CGFloat
     var offset: CGSize
     var initialOffset: CGSize
     var scale: CGFloat
-    var rotationDegrees: Double // Store rotation as degrees (Double)
+    var rotationDegrees: Double
     var width: CGFloat
     var height: CGFloat
     var originalWidth: CGFloat
     var originalHeight: CGFloat
+    var originalFontSize: CGFloat
 
-    // Computed properties for Color and Font
     var color: Color {
-        get { colorComponents.color } // Now correctly uses the .color computed property
+        get { colorComponents.color }
         set { colorComponents = ColorComponents(newValue) }
     }
 
     var font: Font {
         get { Font.custom(fontName, size: fontSize) }
         set {
-            // Extract font name and size from the Font
-            let uiFont = UIFont(name: fontName, size: fontSize) ?? UIFont.systemFont(ofSize: fontSize)
+            // Try to extract new font name/size from the SwiftUI Font
+            let uiFont = UIFont(name: fontName, size: fontSize)
+            ?? UIFont.systemFont(ofSize: fontSize)
             let fontDescriptor = uiFont.fontDescriptor
             fontName = fontDescriptor.fontAttributes[.family] as? String ?? "Arial"
             fontSize = (fontDescriptor.fontAttributes[.size] as? CGFloat) ?? 20
         }
     }
 
-    // Computed property to get/set rotation as Angle
     var rotation: Angle {
         get { Angle(degrees: rotationDegrees) }
         set { rotationDegrees = newValue.degrees }
     }
 
-    // Initializer
-    init(id: UUID = UUID(), text: String, color: Color, font: Font, offset: CGSize, initialOffset: CGSize = .zero, scale: CGFloat, rotation: Angle = .zero, width: CGFloat, height: CGFloat, originalWidth: CGFloat, originalHeight: CGFloat) {
+    init(
+        id: UUID = UUID(),
+        text: String,
+        color: Color,
+        font: Font,
+        offset: CGSize,
+        initialOffset: CGSize = .zero,
+        scale: CGFloat,
+        rotation: Angle = .zero,
+        width: CGFloat,
+        height: CGFloat,
+        originalWidth: CGFloat,
+        originalHeight: CGFloat,
+        originalFontSize: CGFloat
+    ) {
         self.id = id
         self.text = text
         self.colorComponents = ColorComponents(color)
@@ -53,17 +66,18 @@ struct TextItem: Identifiable, Codable {
         self.height = height
         self.originalWidth = originalWidth
         self.originalHeight = originalHeight
-
-        // Extract font name and size from the Font
-        self.font = font // Set the font using the computed property setter
+        self.originalFontSize = originalFontSize
+        
+        // This triggers the computed setter to store fontName/fontSize
+        self.font = font
     }
 
-    // CodingKeys enum
     enum CodingKeys: String, CodingKey {
-        case id, text, colorComponents, fontName, fontSize, offset, initialOffset, scale, rotationDegrees, width, height, originalWidth, originalHeight
+        case id, text, colorComponents, fontName, fontSize,
+             offset, initialOffset, scale, rotationDegrees,
+             width, height, originalWidth, originalHeight, originalFontSize
     }
 
-    // Decoding method
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
@@ -79,9 +93,9 @@ struct TextItem: Identifiable, Codable {
         height = try container.decode(CGFloat.self, forKey: .height)
         originalWidth = try container.decode(CGFloat.self, forKey: .originalWidth)
         originalHeight = try container.decode(CGFloat.self, forKey: .originalHeight)
+        originalFontSize = try container.decode(CGFloat.self, forKey: .originalFontSize)
     }
 
-    // Encoding method
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id, forKey: .id)
@@ -97,5 +111,6 @@ struct TextItem: Identifiable, Codable {
         try container.encode(height, forKey: .height)
         try container.encode(originalWidth, forKey: .originalWidth)
         try container.encode(originalHeight, forKey: .originalHeight)
+        try container.encode(originalFontSize, forKey: .originalFontSize)
     }
 }

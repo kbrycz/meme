@@ -2,34 +2,43 @@ import SwiftUI
 
 struct ImageItem: Identifiable, Codable {
     let id: UUID
-    var imageData: Data // Store image data instead of UIImage
+    var imageData: Data
     var offset: CGSize
     var initialOffset: CGSize
     var scale: CGFloat
-    var rotationDegrees: Double // Store rotation as degrees (Double)
+    var rotationDegrees: Double
     var width: CGFloat
     var height: CGFloat
+    
+    // Needed for pinch gestures:
+    var originalWidth: CGFloat
+    var originalHeight: CGFloat
 
-    // Computed property to get UIImage from imageData
     var image: UIImage? {
         UIImage(data: imageData)
     }
 
-    // Computed property to get/set rotation as Angle
     var rotation: Angle {
         get { Angle(degrees: rotationDegrees) }
         set { rotationDegrees = newValue.degrees }
     }
 
-    // Custom initializer to create an ImageItem from a UIImage
-    init(id: UUID = UUID(), image: UIImage, offset: CGSize = .zero, initialOffset: CGSize = .zero, scale: CGFloat = 1.0, rotation: Angle = .zero, width: CGFloat, height: CGFloat) {
+    init(
+        id: UUID = UUID(),
+        image: UIImage,
+        offset: CGSize = .zero,
+        initialOffset: CGSize = .zero,
+        scale: CGFloat = 1.0,
+        rotation: Angle = .zero,
+        width: CGFloat,
+        height: CGFloat
+    ) {
         self.id = id
-        // Convert UIImage to Data
-        if let imageData = image.jpegData(compressionQuality: 0.8) {
-            self.imageData = imageData
+        // Use PNG data to preserve any transparency:
+        if let data = image.pngData() {
+            self.imageData = data
         } else {
-            // Handle the case where image data is nil, maybe with a default image
-            self.imageData = Data() // You can replace this with data for a default image
+            self.imageData = Data()
         }
         self.offset = offset
         self.initialOffset = initialOffset
@@ -37,11 +46,16 @@ struct ImageItem: Identifiable, Codable {
         self.rotationDegrees = rotation.degrees
         self.width = width
         self.height = height
+        
+        // Start them off the same
+        self.originalWidth = width
+        self.originalHeight = height
     }
 
-    // Encoding and Decoding methods
+    // Coding keys
     enum CodingKeys: String, CodingKey {
-        case id, imageData, offset, initialOffset, scale, rotationDegrees, width, height
+        case id, imageData, offset, initialOffset, scale, rotationDegrees,
+             width, height, originalWidth, originalHeight
     }
 
     init(from decoder: Decoder) throws {
@@ -54,6 +68,8 @@ struct ImageItem: Identifiable, Codable {
         rotationDegrees = try container.decode(Double.self, forKey: .rotationDegrees)
         width = try container.decode(CGFloat.self, forKey: .width)
         height = try container.decode(CGFloat.self, forKey: .height)
+        originalWidth = try container.decode(CGFloat.self, forKey: .originalWidth)
+        originalHeight = try container.decode(CGFloat.self, forKey: .originalHeight)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -66,5 +82,7 @@ struct ImageItem: Identifiable, Codable {
         try container.encode(rotationDegrees, forKey: .rotationDegrees)
         try container.encode(width, forKey: .width)
         try container.encode(height, forKey: .height)
+        try container.encode(originalWidth, forKey: .originalWidth)
+        try container.encode(originalHeight, forKey: .originalHeight)
     }
 }

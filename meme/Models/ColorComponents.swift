@@ -1,6 +1,5 @@
 import SwiftUI
 
-// Helper struct to represent color components
 struct ColorComponents: Codable {
     var red: Double
     var green: Double
@@ -12,9 +11,8 @@ struct ColorComponents: Codable {
             red = Double(components[0])
             green = Double(components[1])
             blue = Double(components[2])
-            opacity = components.count > 3 ? Double(components[3]) : 1.0
+            opacity = (components.count > 3) ? Double(components[3]) : 1.0
         } else {
-            // Default values or handle other color spaces
             red = 0
             green = 0
             blue = 0
@@ -22,8 +20,7 @@ struct ColorComponents: Codable {
         }
     }
     
-    // Computed property to get Color from components
     var color: Color {
-        return Color(red: red, green: green, blue: blue, opacity: opacity)
+        Color(red: red, green: green, blue: blue, opacity: opacity)
     }
 }
